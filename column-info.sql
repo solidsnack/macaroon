@@ -1,24 +1,25 @@
 
-CREATE TYPE column_info
-         AS (num smallint, name name, datatype regtype, pk boolean);
+CREATE FUNCTION pk(tab regclass)
+RETURNS TABLE (col name, typ regtype) AS $$
+  SELECT (tab||'.'||attname)::name, atttypid::regtype
+    FROM pg_attribute JOIN pg_index ON (attnum = ANY (indkey))
+   WHERE attrelid = tab AND attnum > 0 AND indrelid = tab AND indisprimary
+   ORDER BY attnum
+$$ LANGUAGE sql STABLE STRICT;
 
-CREATE FUNCTION column_info(tab regclass) RETURNS SETOF column_info AS $$
-  WITH pk_indexes AS
-  ( SELECT unnest(indkey) AS column_number FROM pg_index
-     WHERE indrelid = tab AND indisprimary )
-  SELECT attnum, attname, atttypid::regtype,
-         EXISTS (SELECT * FROM pk_indexes WHERE column_number = attnum) 
+CREATE FUNCTION cols(tab regclass)
+RETURNS TABLE (col name, typ regtype) AS $$
+  SELECT (tab||'.'||attname)::name, atttypid::regtype
     FROM pg_attribute
    WHERE attrelid = tab AND attnum > 0
    ORDER BY attnum
-$$ LANGUAGE sql STABLE STRICT
-   SET search_path FROM CURRENT;
+$$ LANGUAGE sql STABLE STRICT;
 
-CREATE FUNCTION true_ts_column(tab regclass) RETURNS column_info AS $$
-  SELECT * FROM column_info(tab)
-   WHERE datatype = 'timestamptz'::regtype AND NOT pk
-   ORDER BY num LIMIT 1
-$$ LANGUAGE sql STABLE STRICT
-   SET search_path FROM CURRENT;
-
-
+CREATE FUNCTION fk(tab regclass)
+RETURNS TABLE (col name, typ regtype) AS $$
+  --- TODO: zip(conkey, confkey) and get a schema qualified name for confkey
+  SELECT (tab||'.'||attname)::name, atttypid::regtype
+    FROM pg_attribute JOIN pg_constraint ON (attnum = ANY (conkey))
+   WHERE attrelid = tab AND attnum > 0 AND conrelid = tab
+   ORDER BY attnum
+$$ LANGUAGE sql STABLE STRICT;
