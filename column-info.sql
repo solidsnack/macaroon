@@ -1,25 +1,42 @@
+BEGIN;
 
-CREATE FUNCTION pk(tab regclass)
-RETURNS TABLE (col name, typ regtype) AS $$
-  SELECT (tab||'.'||attname)::name, atttypid::regtype
-    FROM pg_attribute JOIN pg_index ON (attnum = ANY (indkey))
-   WHERE attrelid = tab AND attnum > 0 AND indrelid = tab AND indisprimary
-   ORDER BY attnum
+DROP SCHEMA IF EXISTS meta CASCADE;
+CREATE SCHEMA meta;
+SET LOCAL search_path TO meta;  -- All functions will be created in this schema
+
+CREATE VIEW pk AS
+SELECT attrelid::regclass AS tab,
+       array_agg(attname)::name[] AS cols
+  FROM pg_attribute
+  JOIN pg_index ON (attrelid = indrelid AND attnum = ANY (indkey))
+ WHERE indisprimary
+ GROUP BY attrelid;
+
+CREATE VIEW cols AS
+SELECT attrelid::regclass AS tab,
+       attname::name AS col,
+       atttypid::regtype AS typ
+  FROM pg_attribute
+ WHERE attnum > 0
+ ORDER BY attrelid, attnum;
+
+CREATE VIEW fk AS
+SELECT conrelid::regclass AS tab,
+       array_agg(self.attname)::name[] AS cols,
+       confrelid::regclass AS other,
+       array_agg(other.attname)::name[] AS refs
+  FROM pg_constraint
+  JOIN pg_attribute AS self
+    ON (self.attrelid = conrelid AND self.attnum = ANY (conkey))
+  JOIN pg_attribute AS other
+    ON (other.attrelid = conrelid AND other.attnum = ANY (conkey))
+ WHERE confrelid != 0
+ GROUP BY conrelid, confrelid;
+
+CREATE FUNCTION ns(tab regclass) RETURNS name AS $$
+  SELECT nspname
+    FROM pg_class JOIN pg_namespace ON (pg_namespace.oid = relnamespace)
+   WHERE pg_class.oid = tab
 $$ LANGUAGE sql STABLE STRICT;
 
-CREATE FUNCTION cols(tab regclass)
-RETURNS TABLE (col name, typ regtype) AS $$
-  SELECT (tab||'.'||attname)::name, atttypid::regtype
-    FROM pg_attribute
-   WHERE attrelid = tab AND attnum > 0
-   ORDER BY attnum
-$$ LANGUAGE sql STABLE STRICT;
-
-CREATE FUNCTION fk(tab regclass)
-RETURNS TABLE (col name, typ regtype) AS $$
-  --- TODO: zip(conkey, confkey) and get a schema qualified name for confkey
-  SELECT (tab||'.'||attname)::name, atttypid::regtype
-    FROM pg_attribute JOIN pg_constraint ON (attnum = ANY (conkey))
-   WHERE attrelid = tab AND attnum > 0 AND conrelid = tab
-   ORDER BY attnum
-$$ LANGUAGE sql STABLE STRICT;
+COMMIT;
