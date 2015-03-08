@@ -15,7 +15,8 @@ SELECT attrelid::regclass AS tab,
 CREATE VIEW cols AS
 SELECT attrelid::regclass AS tab,
        attname::name AS col,
-       atttypid::regtype AS typ
+       atttypid::regtype AS typ,
+       attnum AS num
   FROM pg_attribute
  WHERE attnum > 0
  ORDER BY attrelid, attnum;
@@ -49,8 +50,8 @@ CREATE FUNCTION pk(t regclass) RETURNS name[] AS $$
 $$ LANGUAGE sql STABLE STRICT;
 
 CREATE FUNCTION cols(t regclass)
-RETURNS TABLE (col name, typ regtype) AS $$
-  SELECT col, typ FROM meta.cols WHERE meta.cols.tab = t;
+RETURNS TABLE (num smallint, col name, typ regtype) AS $$
+  SELECT num, col, typ FROM meta.cols WHERE meta.cols.tab = t;
 $$ LANGUAGE sql STABLE STRICT;
 
 CREATE FUNCTION fk(t regclass)
