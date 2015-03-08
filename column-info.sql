@@ -39,4 +39,18 @@ CREATE FUNCTION ns(tab regclass) RETURNS name AS $$
    WHERE pg_class.oid = tab
 $$ LANGUAGE sql STABLE STRICT;
 
+CREATE FUNCTION pk(t regclass) RETURNS name[] AS $$
+  SELECT cols FROM meta.pk WHERE meta.pk.tab = t;
+$$ LANGUAGE sql STABLE STRICT;
+
+CREATE FUNCTION cols(t regclass)
+RETURNS TABLE (col name, typ regtype) AS $$
+  SELECT col, typ FROM meta.cols WHERE meta.cols.tab = t;
+$$ LANGUAGE sql STABLE STRICT;
+
+CREATE FUNCTION fk(t regclass)
+RETURNS TABLE (cols name[], other regclass, refs name[]) AS $$
+  SELECT cols, other, refs FROM meta.fk WHERE meta.fk.tab = t;
+$$ LANGUAGE sql STABLE STRICT;
+
 COMMIT;
