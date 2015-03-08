@@ -22,16 +22,21 @@ SELECT attrelid::regclass AS tab,
 
 CREATE VIEW fk AS
 SELECT conrelid::regclass AS tab,
-       array_agg(self.attname)::name[] AS cols,
+       names.cols,
        confrelid::regclass AS other,
-       array_agg(other.attname)::name[] AS refs
-  FROM pg_constraint
-  JOIN pg_attribute AS self
-    ON (self.attrelid = conrelid AND self.attnum = ANY (conkey))
-  JOIN pg_attribute AS other
-    ON (other.attrelid = conrelid AND other.attnum = ANY (conkey))
- WHERE confrelid != 0
- GROUP BY conrelid, confrelid;
+       names.refs
+  FROM pg_constraint,
+       LATERAL (SELECT array_agg(cols.attname) AS cols,
+                       array_agg(refs.attname) AS refs
+                  FROM unnest(conkey, confkey) AS _(col, ref),
+                       LATERAL (SELECT * FROM pg_attribute
+                                 WHERE attrelid = conrelid AND attnum = col)
+                            AS cols,
+                       LATERAL (SELECT * FROM pg_attribute
+                                 WHERE attrelid = confrelid AND attnum = ref)
+                            AS refs)
+            AS names
+ WHERE confrelid != 0;
 
 CREATE FUNCTION ns(tab regclass) RETURNS name AS $$
   SELECT nspname
