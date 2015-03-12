@@ -28,6 +28,7 @@ SELECT conrelid::regclass AS tab,
        names.refs
   FROM pg_constraint,
        LATERAL (SELECT array_agg(cols.attname) AS cols,
+                       array_agg(cols.attnum)  AS nums,
                        array_agg(refs.attname) AS refs
                   FROM unnest(conkey, confkey) AS _(col, ref),
                        LATERAL (SELECT * FROM pg_attribute
@@ -37,7 +38,8 @@ SELECT conrelid::regclass AS tab,
                                  WHERE attrelid = confrelid AND attnum = ref)
                             AS refs)
             AS names
- WHERE confrelid != 0;
+ WHERE confrelid != 0
+ ORDER BY (conrelid, names.nums);             -- Returned in column index order
 
 CREATE FUNCTION ns(tab regclass) RETURNS name AS $$
   SELECT nspname
@@ -59,4 +61,4 @@ RETURNS TABLE (cols name[], other regclass, refs name[]) AS $$
   SELECT cols, other, refs FROM meta.fk WHERE meta.fk.tab = t;
 $$ LANGUAGE sql STABLE STRICT;
 
-COMMIT;
+END;
