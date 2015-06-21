@@ -1,5 +1,6 @@
 BEGIN;
 
+SET LOCAL client_min_messages TO error;
 DROP SCHEMA IF EXISTS meta CASCADE;
 CREATE SCHEMA meta;
 SET LOCAL search_path TO meta;  -- All functions will be created in this schema
