@@ -106,13 +106,33 @@ BEGIN
            VALUES ($$||array_to_string(insert_exprs, ', ')||$$);
     $f$ LANGUAGE sql;
     DO $do$ BEGIN
+      --- The remember trigger should be AFTER, to ensure it sees the final
+      --- state of the row.
       CREATE TRIGGER remember AFTER UPDATE OR DELETE
           ON $$||tab||$$
          FOR EACH ROW EXECUTE PROCEDURE temporal.remember();
     EXCEPTION
-       WHEN duplicate_object
-       THEN RAISE NOTICE 'Already created trigger remember on %',
-            $$||quote_literal(tab)||$$;
+      WHEN duplicate_object THEN
+        RAISE NOTICE 'Already created trigger remember on %',
+                     $$||quote_literal(tab)||$$;
+    END $do$;
+  $$);
+  code := code || text($$
+    CREATE OR REPLACE FUNCTION temporal.reset_time(NEW $$||tab||$$)
+    RETURNS $$||tab||$$ AS $f$
+    BEGIN
+      NEW.$$||quote_ident(time_column)||$$ := now();
+      RETURN NEW;
+    END
+    $f$ LANGUAGE plpgsql;
+    DO $do$ BEGIN
+      CREATE TRIGGER reset_time BEFORE UPDATE
+          ON $$||tab||$$
+         FOR EACH ROW EXECUTE PROCEDURE temporal.reset_time();
+    EXCEPTION
+      WHEN duplicate_object THEN
+        RAISE NOTICE 'Already created trigger reset_time on %',
+                     $$||quote_literal(tab)||$$;
     END $do$;
   $$);
   IF notifies IS NOT NULL THEN
@@ -145,18 +165,17 @@ $code$ LANGUAGE plpgsql;
 --- do the actual updates. Overloads ensure the right variant is called.
 CREATE OR REPLACE FUNCTION remember() RETURNS trigger AS $$
 BEGIN
-  CASE TG_OP
-  WHEN 'UPDATE' THEN
-    PERFORM temporal.remember(OLD);
-    RETURN NEW;
-  WHEN 'DELETE' THEN
-    PERFORM temporal.remember(OLD);
-    RETURN OLD;
-  END CASE;
-END $$ LANGUAGE plpgsql;
+  PERFORM temporal.remember(OLD);
+  RETURN NULL;
+END
+$$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION quote_type(typ regtype) RETURNS text AS $$
-  SELECT quote_ident(typ::name)
-$$ LANGUAGE sql IMMUTABLE STRICT;
+--- This trigger relies on functions of the same name -- reset_time(...) --
+--- that actually set the time. Overloads ensure the right variant is called.
+CREATE OR REPLACE FUNCTION reset_time() RETURNS trigger AS $$
+BEGIN
+  RETURN temporal.reset_time(NEW);
+END
+$$ LANGUAGE plpgsql;
 
 END;
