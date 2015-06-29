@@ -24,8 +24,8 @@ CREATE TABLE abc (
   data text
 );
 --- CREATE TABLE
---- # solidsnack@[local]/~
---- = SELECT * FROM temporal.setup('abc', notifies := 'abc');
+
+SELECT * FROM temporal.setup('abc', notifies := 'abc');
 ---  tab │    past    │ notifies 
 --- ─────┼────────────┼──────────
 ---  abc │ "abc/past" │ abc
