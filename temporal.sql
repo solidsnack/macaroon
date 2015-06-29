@@ -79,10 +79,9 @@ BEGIN
         ALTER TABLE $$||past||$$
          ADD COLUMN $$||quote_ident(col)||$$ $$||typ||$$;
       EXCEPTION
-         WHEN duplicate_column
-         THEN RAISE NOTICE 'Already created column: % %',
-                           $$||quote_literal(col)||$$,
-                           $$||quote_literal(typ)||$$;
+        WHEN duplicate_column THEN
+          RAISE NOTICE 'Already created column: % %',
+                       $$||quote_literal(col)||$$, $$||quote_literal(typ)||$$;
       END $do$;
     $$);
     IF col = time_column THEN
@@ -91,9 +90,9 @@ BEGIN
         DO $do$ BEGIN
           CREATE INDEX $$||idx||$$ ON $$||past||$$ ($$||col||$$);
         EXCEPTION
-           WHEN duplicate_table
-           THEN RAISE NOTICE 'Already created index: %',
-                $$||quote_literal(idx)||$$;
+          WHEN duplicate_table THEN
+            RAISE NOTICE 'Already created index: %',
+                         $$||quote_literal(idx)||$$;
         END $do$;
       $$);
     END IF;
@@ -122,7 +121,7 @@ BEGIN
   FOREACH statement IN ARRAY code LOOP
     --- Clean up all the whitespace in the generated SQL.
     statement := regexp_replace(statement, '\n[ ]*$', '', 'g');
-    statement := regexp_replace(statement, '^    ', '', 'gn');
+    statement := regexp_replace(statement, '^    ',   '', 'gn');
     ddl := ddl || statement;
   END LOOP;
 END
