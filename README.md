@@ -58,5 +58,7 @@ This does not work, however, for column removal or change of type.
 
 One thing to note is that only older data shows up in the table of states.
 This is one way that these tables are different from true temporal tables.
-Another way they are different is that there is no way to track a change of
-primary key.
+Another way they are different is that while SQL 2011 provides for an "entity
+ID" that exists apart from the primary key, this implementation has no such
+concept. Changes to the primary key will be recorded but there's no easy way
+to track them.
