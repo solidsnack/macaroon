@@ -1,11 +1,13 @@
 BEGIN;
 
-CREATE SCHEMA IF NOT EXISTS temporal;
-COMMENT ON SCHEMA temporal IS
- 'State tracking for tables which already have a column which indicates when '
- 'a row was last changed. Updates to primary key columns are not tracked in '
- 'any special way (beware if using a natural primary key).';
-SET LOCAL search_path TO temporal, public;
+CREATE SCHEMA IF NOT EXISTS replay;
+COMMENT ON SCHEMA replay IS
+ 'Offers macros for a simplified approach to storing temporal data. Tables '
+ 'with a timestamp column (like updated_at) are transparently upgraded with '
+ 'triggers to store old row versions in a companion history table. A trigger '
+ 'takes care of setting the timestampt, too. In the companion history table, '
+ 'the timestamp column is extended to a period.';
+SET LOCAL search_path TO replay, public;
 
 CREATE OR REPLACE FUNCTION setup(tab INOUT regclass,
                                  past_schema name DEFAULT NULL,
@@ -19,7 +21,7 @@ DECLARE
   past_name text;
 BEGIN
   SELECT _.ddl, _.past INTO STRICT ddl, past_name
-    FROM temporal.codegen(tab, past_schema, past_tab, notifies, time_column)
+    FROM replay.codegen(tab, past_schema, past_tab, notifies, time_column)
       AS _;
   FOREACH statement IN ARRAY ddl LOOP
     EXECUTE statement;
@@ -100,7 +102,7 @@ BEGIN
   code := code || text($$
     --- Note that this is not a trigger. Calling the input row OLD
     --- is a nod to convention.
-    CREATE OR REPLACE FUNCTION temporal.remember(OLD $$||tab||$$)
+    CREATE OR REPLACE FUNCTION replay.remember(OLD $$||tab||$$)
     RETURNS void AS $f$
       INSERT INTO $$||past||$$ ($$||array_to_string(insert_cols, ', ')||$$)
            VALUES ($$||array_to_string(insert_exprs, ', ')||$$);
@@ -110,7 +112,7 @@ BEGIN
       --- state of the row.
       CREATE TRIGGER remember AFTER UPDATE OR DELETE
           ON $$||tab||$$
-         FOR EACH ROW EXECUTE PROCEDURE temporal.remember();
+         FOR EACH ROW EXECUTE PROCEDURE replay.remember();
     EXCEPTION
       WHEN duplicate_object THEN
         RAISE NOTICE 'Already created trigger remember on %',
@@ -118,7 +120,7 @@ BEGIN
     END $do$;
   $$);
   code := code || text($$
-    CREATE OR REPLACE FUNCTION temporal.reset_time(NEW $$||tab||$$)
+    CREATE OR REPLACE FUNCTION replay.reset_time(NEW $$||tab||$$)
     RETURNS $$||tab||$$ AS $f$
     BEGIN
       NEW.$$||quote_ident(time_column)||$$ := now();
@@ -128,7 +130,7 @@ BEGIN
     DO $do$ BEGIN
       CREATE TRIGGER reset_time BEFORE UPDATE
           ON $$||tab||$$
-         FOR EACH ROW EXECUTE PROCEDURE temporal.reset_time();
+         FOR EACH ROW EXECUTE PROCEDURE replay.reset_time();
     EXCEPTION
       WHEN duplicate_object THEN
         RAISE NOTICE 'Already created trigger reset_time on %',
@@ -136,7 +138,7 @@ BEGIN
     END $do$;
   $$);
   IF notifies IS NOT NULL THEN
-    code := code || temporal.notifiable(tab, notifies);
+    code := code || replay.notifiable(tab, notifies);
   END IF;
   FOREACH statement IN ARRAY code LOOP
     --- Clean up all the whitespace in the generated SQL.
@@ -165,7 +167,7 @@ $code$ LANGUAGE plpgsql;
 --- do the actual updates. Overloads ensure the right variant is called.
 CREATE OR REPLACE FUNCTION remember() RETURNS trigger AS $$
 BEGIN
-  PERFORM temporal.remember(OLD);
+  PERFORM replay.remember(OLD);
   RETURN NULL;
 END
 $$ LANGUAGE plpgsql;
@@ -174,7 +176,7 @@ $$ LANGUAGE plpgsql;
 --- that actually set the time. Overloads ensure the right variant is called.
 CREATE OR REPLACE FUNCTION reset_time() RETURNS trigger AS $$
 BEGIN
-  RETURN temporal.reset_time(NEW);
+  RETURN replay.reset_time(NEW);
 END
 $$ LANGUAGE plpgsql;
 
