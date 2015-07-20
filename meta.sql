@@ -42,10 +42,14 @@ SELECT conrelid::regclass AS tab,
  WHERE confrelid != 0
  ORDER BY (conrelid, names.nums);             -- Returned in column index order
 
-CREATE FUNCTION ns(tab regclass) RETURNS name AS $$
+CREATE FUNCTION schemaname(tab regclass) RETURNS name AS $$
   SELECT nspname
     FROM pg_class JOIN pg_namespace ON (pg_namespace.oid = relnamespace)
    WHERE pg_class.oid = tab
+$$ LANGUAGE sql STABLE STRICT;
+
+CREATE FUNCTION tablename(tab regclass) RETURNS name AS $$
+  SELECT relname FROM pg_class WHERE oid = tab
 $$ LANGUAGE sql STABLE STRICT;
 
 CREATE FUNCTION pk(t regclass) RETURNS name[] AS $$
