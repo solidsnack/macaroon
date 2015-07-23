@@ -22,13 +22,13 @@ BEGIN
   RETURN $$
     CREATE OR REPLACE RULE notify_ins AS ON INSERT TO $$||tab||$$
         DO ALSO SELECT pg_notify($$||quote_literal(channel)||$$,
-                                 txid_current()::text);
+                                 'txid:'||txid_current());
     CREATE OR REPLACE RULE notify_upd AS ON UPDATE TO $$||tab||$$
         DO ALSO SELECT pg_notify($$||quote_literal(channel)||$$,
-                                 txid_current()::text);
+                                 'txid:'||txid_current());
     CREATE OR REPLACE RULE notify_del AS ON DELETE TO $$||tab||$$
         DO ALSO SELECT pg_notify($$||quote_literal(channel)||$$,
-                                 txid_current()::text);
+                                 'txid:'||txid_current());
   $$;
 END
 $code$ LANGUAGE plpgsql;
