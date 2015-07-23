@@ -103,4 +103,9 @@ EXCEPTION WHEN unique_violation THEN
 END
 $$ LANGUAGE plpgsql STRICT;
 
+CREATE VIEW audited AS
+SELECT tgrelid::regclass AS audited,
+       trim('\x00' from tgargs::text)::regclass AS events
+  FROM pg_trigger WHERE tgfoid = 'audit.audit'::regproc;
+
 END;
