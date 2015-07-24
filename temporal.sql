@@ -42,7 +42,7 @@ BEGIN
   fullname := format('%I.%I', state_schema, state_tab);
   IF meta.schemaname(tab) = state_schema AND
      meta.tablename(tab) = state_tab THEN
-    RAISE EXCEPTION 'It looks like we''re trying to create an state table '
+    RAISE EXCEPTION 'It looks like we''re trying to create a state table '
                     'with the same name and schema as the base table.';
   END IF;
   code := code || $$
