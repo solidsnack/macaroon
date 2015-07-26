@@ -16,15 +16,17 @@ COMMENT ON TABLE state IS
 CREATE INDEX "state/txid" ON state (txid);
 CREATE INDEX "state/t" ON state (t);
 
-CREATE FUNCTION setup(tab regclass,
-                      state_schema name DEFAULT NULL,
-                      state_tab name DEFAULT NULL)
-RETURNS void AS $$
+CREATE FUNCTION temporal(tab regclass,
+                         state_schema name DEFAULT NULL,
+                         state_tab name DEFAULT NULL)
+RETURNS regclass AS $$
 BEGIN
   EXECUTE temporal.codegen(tab, state_schema, state_tab);
+  RETURN (SELECT states FROM temporal.logged
+           WHERE temporal.logged.logged = tab);
 END
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION setup(regclass, name, name) IS
+COMMENT ON FUNCTION temporal(regclass, name, name) IS
  'Configures triggers and a state table top provide row versioning.';
 
 CREATE FUNCTION codegen(tab regclass,
@@ -37,8 +39,12 @@ DECLARE
   fullname    text;
   code        text := '';
 BEGIN
-  state_tab := COALESCE(state_tab, meta.tablename(tab)||'/state');
   state_schema := COALESCE(state_schema, meta.schemaname(tab));
+  IF state_schema = meta.schemaname(tab) THEN
+    state_tab := COALESCE(state_tab, meta.tablename(tab)||'/state');
+  ELSE
+    state_tab := COALESCE(state_tab, meta.tablename(tab));
+  END IF;
   fullname := format('%I.%I', state_schema, state_tab);
   IF meta.schemaname(tab) = state_schema AND
      meta.tablename(tab) = state_tab THEN
@@ -46,6 +52,7 @@ BEGIN
                     'with the same name and schema as the base table.';
   END IF;
   code := code || $$
+    CREATE SCHEMA IF NOT EXISTS $$||quote_ident(state_schema)||$$;
     CREATE TABLE $$||fullname||$$ (
       LIKE temporal.state INCLUDING INDEXES INCLUDING DEFAULTS,
       new $$||tab||$$,
@@ -78,8 +85,8 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
-CREATE VIEW registered AS
-SELECT typrelid::regclass AS data,
+CREATE VIEW logged AS
+SELECT typrelid::regclass AS logged,
        pg_class.oid::regclass AS states
   FROM pg_class
   JOIN pg_inherits ON (pg_class.oid = inhrelid)

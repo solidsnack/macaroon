@@ -1,64 +1,59 @@
 
-
 Many tricky table configurations -- for example, logged tables and partitioned
 tables -- would seem to be amenable to mechanical derivation. The SQL standard
 provides for fairly rich introspection capabilities -- on par with any object
 oriented language -- so it stands to reason that we should be able to use
 metaprogramming to derive advanced table configurations mechanically.
 
-The `meta` schema in `meta.sql` should be loaded before loading the others.
+The `meta` schema in `meta.sql` should be loaded before loading the others. To
+load all the schemas together, run `\i macaroon.psql` at the `psql` prompt.
 
 
-Temporal Tables
----------------
+Creating Tables for Auditing & Versioning
+-------------------------------------------
 
-Simple temporal tables -- not really as rich as those provided for by SQL 2011,
-but a start -- can be derived using `temporal.setup` from `temporal.sql`. If
-`notifies` is passed in addition to the table name, then notifications on
-`INSERT`, `UPDATE` and `DELETE` will be setup.
+Imagine that your application has tables in the `app` namespace; and you'd like
+to log past row versions and metadata about changes to the `state` and `events`
+schemas, respectively. You can idempotently configure both audit and version
+stracking by `SELECT`ing tables in the `app` namespace that are not already
+tracked and passing them to the setup functions:
 
 ```sql
-CREATE TABLE abc (
-  abc SERIAL PRIMARY KEY,
-  t timestamptz DEFAULT now(),
-  data text
-);
---- CREATE TABLE
+SELECT tab,
+       temporal.temporal(tab, 'state'),
+       audit.audit(tab, 'events')
+  FROM pg_tables,
+       LATERAL (SELECT (schemaname||'.'||tablename)::regclass)
+            AS cast_to_regclass(tab)
+ WHERE schemaname = 'app'
+   AND tab NOT IN (SELECT logged FROM temporal.logged
+                    UNION
+                   SELECT audited FROM audit.audited);
 
-SELECT * FROM temporal.setup('abc', notifies := 'abc');
----  tab │    past    │ notifies 
---- ─────┼────────────┼──────────
----  abc │ "abc/past" │ abc
---- (1 row)
-
-INSERT INTO abc VALUES (DEFAULT, DEFAULT, 'some text') RETURNING abc;
----  abc
---- ─────
----    1
---- (1 row)
----
---- INSERT 0 1
---- Asynchronous notification "abc" with payload "+" received from server process with PID 76097.
-
-UPDATE abc SET data = 'other text' WHERE abc = 1;
---- UPDATE 1
---- Asynchronous notification "abc" with payload "~" received from server process with PID 76097.
-
-SELECT * FROM "abc/past";
---- ─[ RECORD 1 ]───────────────────────────────────────────────────────────
---- abc  │ 1
---- t    │ ["2015-06-28 00:00:53.268243-07","2015-06-28 00:01:11.899717-07")
---- data │ some text
+      tab      │    temporal     │      audit
+───────────────┼─────────────────┼──────────────────
+ app.user_info │ state.user_info │ events.user_info
+ app.telephone │ state.telephone │ events.telephone
+ app.cpu       │ state.cpu       │ events.cpu
+ ...           | ...             | ...
 ```
 
-The interaction between SQL macros and migrations is still very much a work in
-progress. Adding a column and rerunning the macro works as you would expect it
-to; the trigger and underlying table are updated to reflect the new column.
-This does not work, however, for column removal or change of type.
 
-One thing to note is that only older data shows up in the table of states.
-This is one way that these tables are different from true temporal tables.
-Another way they are different is that while SQL 2011 provides for an "entity
-ID" that exists apart from the primary key, this implementation has no such
-concept. Changes to the primary key will be recorded but there's no easy way
-to track them.
+Using The Auditing & Versioning Tables
+--------------------------------------
+
+The audit and temporal tables for each table that is tracked can be joined on
+the `txid` column to see all the actions that took place during a particular
+transaction.
+
+
+A Note About Migrations
+-----------------------
+
+The audit tables are indifferent to migrations -- they do not store any row
+data. The temporal tables have columns that contain whole rows from the logged
+tables, so migrations will transparently upgrade the temporal tables, too. This
+is good and bad. It's good because migrations won't break logging; it's bad
+because migrations are going to hit not only the present state but also all
+past states.
+

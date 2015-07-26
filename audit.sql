@@ -32,15 +32,16 @@ CREATE INDEX "event/who" ON event (who);
 CREATE INDEX "event/app" ON event (app);
 CREATE INDEX "event/pid" ON event (app);
 
-CREATE FUNCTION setup(tab regclass,
+CREATE FUNCTION audit(tab regclass,
                       event_schema name DEFAULT NULL,
                       event_tab name DEFAULT NULL)
-RETURNS void AS $$
+RETURNS regclass AS $$
 BEGIN
   EXECUTE audit.codegen(tab, event_schema, event_tab);
+  RETURN (SELECT events FROM audit.audited WHERE audit.audited.audited = tab);
 END
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION setup(regclass, name, name) IS
+COMMENT ON FUNCTION audit(regclass, name, name) IS
  'Triggers to log user, application, pid and time of every INSERT, UPDATE and '
  'DELETE, but not logging the row contents. Every change is associated with a '
  'transaction ID.';
@@ -55,8 +56,12 @@ DECLARE
   fullname    text;
   code        text := '';
 BEGIN
-  event_tab := COALESCE(event_tab, meta.tablename(tab)||'/event');
   event_schema := COALESCE(event_schema, meta.schemaname(tab));
+  IF event_schema = meta.schemaname(tab) THEN
+    event_tab := COALESCE(event_tab, meta.tablename(tab)||'/event');
+  ELSE
+    event_tab := COALESCE(event_tab, meta.tablename(tab));
+  END IF;
   fullname := format('%I.%I', event_schema, event_tab);
   IF meta.schemaname(tab) = event_schema AND
      meta.tablename(tab) = event_tab THEN
@@ -64,6 +69,7 @@ BEGIN
                     'with the same name and schema as the base table.';
   END IF;
   code := code || $$
+    CREATE SCHEMA IF NOT EXISTS $$||quote_ident(event_schema)||$$;
     CREATE TABLE $$||fullname||$$ (
       LIKE audit.event INCLUDING INDEXES INCLUDING DEFAULTS,
       CHECK (tab = $$||tab::oid||$$::regclass)
@@ -73,7 +79,7 @@ BEGIN
     CREATE TRIGGER audit AFTER INSERT OR UPDATE OR DELETE
         ON $$||tab||$$
        FOR EACH ROW EXECUTE PROCEDURE
-         audit.audit($$||quote_literal(fullname)||$$);
+         audit.save($$||quote_literal(fullname)||$$);
   $$;
   --- Clean up all the whitespace in the generated SQL.
   code := regexp_replace(code, '\n[ ]*$', '', 'g');
@@ -82,7 +88,7 @@ BEGIN
 END
 $code$ LANGUAGE plpgsql;
 
-CREATE FUNCTION audit() RETURNS trigger AS $$
+CREATE FUNCTION save() RETURNS trigger AS $$
 DECLARE
   op        audit.op;
   event_tab regclass;
@@ -106,6 +112,6 @@ $$ LANGUAGE plpgsql STRICT;
 CREATE VIEW audited AS
 SELECT tgrelid::regclass AS audited,
        trim('\x00' from tgargs::text)::regclass AS events
-  FROM pg_trigger WHERE tgfoid = 'audit.audit'::regproc;
+  FROM pg_trigger WHERE tgfoid = 'audit.save'::regproc;
 
 END;
