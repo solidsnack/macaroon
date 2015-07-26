@@ -12,9 +12,12 @@ CREATE TABLE event (
   op        op NOT NULL,
   tab       regclass NOT NULL,
   t         timestamptz NOT NULL DEFAULT now(),
-  who       text NOT NULL DEFAULT session_user,
+  user      text NOT NULL DEFAULT session_user,
   app       text NOT NULL DEFAULT application_name(),
   pid       integer NOT NULL DEFAULT pg_backend_pid(),
+  client    text NOT NULL DEFAULT
+              COALESCE(host(inet_client_addr())||':'||inet_client_port(),
+                       '(unix)'),
   PRIMARY KEY (txid, op, tab),
   CHECK (FALSE) NO INHERIT
 );
