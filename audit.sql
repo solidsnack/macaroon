@@ -12,7 +12,7 @@ CREATE TABLE event (
   op        op NOT NULL,
   tab       regclass NOT NULL,
   t         timestamptz NOT NULL DEFAULT now(),
-  user      text NOT NULL DEFAULT session_user,
+  "user"    text NOT NULL DEFAULT session_user,
   app       text NOT NULL DEFAULT application_name(),
   pid       integer NOT NULL DEFAULT pg_backend_pid(),
   client    text NOT NULL DEFAULT
@@ -31,7 +31,7 @@ CREATE INDEX "event/txid" ON event (txid);
 CREATE INDEX "event/t" ON event (t);
 CREATE INDEX "event/op" ON event (op);
 CREATE INDEX "event/tab" ON event (tab);
-CREATE INDEX "event/who" ON event (who);
+CREATE INDEX "event/user" ON event ("user");
 CREATE INDEX "event/app" ON event (app);
 CREATE INDEX "event/pid" ON event (app);
 

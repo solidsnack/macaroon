@@ -18,20 +18,22 @@ CREATE INDEX "state/t" ON state (t);
 
 CREATE FUNCTION temporal(tab regclass,
                          state_schema name DEFAULT NULL,
-                         state_tab name DEFAULT NULL)
+                         state_tab name DEFAULT NULL,
+                         with_old boolean DEFAULT FALSE)
 RETURNS regclass AS $$
 BEGIN
-  EXECUTE temporal.codegen(tab, state_schema, state_tab);
+  EXECUTE temporal.codegen(tab, state_schema, state_tab, with_old);
   RETURN (SELECT states FROM temporal.logged
            WHERE temporal.logged.logged = tab);
 END
 $$ LANGUAGE plpgsql;
-COMMENT ON FUNCTION temporal(regclass, name, name) IS
+COMMENT ON FUNCTION temporal(regclass, name, name, boolean) IS
  'Configures triggers and a state table top provide row versioning.';
 
 CREATE FUNCTION codegen(tab regclass,
                         state_schema name DEFAULT NULL,
-                        state_tab name DEFAULT NULL)
+                        state_tab name DEFAULT NULL,
+                        with_old boolean DEFAULT FALSE)
 RETURNS text AS $code$
 DECLARE
   entity_type text;
@@ -53,15 +55,32 @@ BEGIN
   END IF;
   code := code || $$
     CREATE SCHEMA IF NOT EXISTS $$||quote_ident(state_schema)||$$;
-    CREATE TABLE $$||fullname||$$ (
-      LIKE temporal.state INCLUDING INDEXES INCLUDING DEFAULTS,
-      new $$||tab||$$,
-      old $$||tab||$$
-    ) INHERITS (temporal.state);
-    CREATE FUNCTION temporal.save($$||tab||$$, $$||tab||$$)
-    RETURNS void AS $f$
-      INSERT INTO $$||fullname||$$ (new, old) VALUES ($1, $2)
-    $f$ LANGUAGE sql;
+  $$;
+  IF with_old THEN
+    code := code || $$
+      CREATE TABLE $$||fullname||$$ (
+        LIKE temporal.state INCLUDING INDEXES INCLUDING DEFAULTS,
+        new $$||tab||$$,
+        old $$||tab||$$
+      ) INHERITS (temporal.state);
+      CREATE FUNCTION temporal.save($$||tab||$$, $$||tab||$$)
+      RETURNS void AS $f$
+        INSERT INTO $$||fullname||$$ (new, old) VALUES ($1, $2)
+      $f$ LANGUAGE sql;
+    $$;
+  ELSE
+    code := code || $$
+      CREATE TABLE $$||fullname||$$ (
+        LIKE temporal.state INCLUDING INDEXES INCLUDING DEFAULTS,
+        new $$||tab||$$
+      ) INHERITS (temporal.state);
+      CREATE FUNCTION temporal.save($$||tab||$$, $$||tab||$$)
+      RETURNS void AS $f$
+        INSERT INTO $$||fullname||$$ (new) VALUES ($1)
+      $f$ LANGUAGE sql;
+    $$;
+  END IF;
+  code := code || $$
     CREATE TRIGGER temporal AFTER INSERT OR UPDATE OR DELETE
         ON $$||tab||$$
        FOR EACH ROW EXECUTE PROCEDURE temporal.save();
