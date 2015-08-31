@@ -7,6 +7,10 @@ SET LOCAL search_path TO audit, public;
 
 CREATE TYPE op AS ENUM ('+', '~', '-');
 
+CREATE FUNCTION application_name() RETURNS text AS $$
+  SELECT application_name FROM pg_stat_activity WHERE pid = pg_backend_pid()
+$$ LANGUAGE sql;
+
 CREATE TABLE event (
   txid      bigint NOT NULL DEFAULT txid_current(),
   op        op NOT NULL,
