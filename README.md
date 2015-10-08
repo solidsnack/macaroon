@@ -23,8 +23,8 @@ SELECT tab,
        temporal.temporal(tab, 'state'),
        audit.audit(tab, 'events')
   FROM pg_tables,
-       LATERAL (SELECT (schemaname||'.'||tablename)::regclass)
-            AS cast_to_regclass(tab)
+       LATERAL (SELECT (schemaname||'.'||tablename)::regclass AS tab)
+            AS casted_to_regclass
  WHERE schemaname = 'app'
    AND tab NOT IN (SELECT logged FROM temporal.logged
                     UNION
