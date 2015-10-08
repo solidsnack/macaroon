@@ -35,7 +35,7 @@ SELECT tab,
  app.user_info │ state.user_info │ events.user_info
  app.telephone │ state.telephone │ events.telephone
  app.cpu       │ state.cpu       │ events.cpu
- ...           | ...             | ...
+ ...           │ ...             │ ...
 ```
 
 
