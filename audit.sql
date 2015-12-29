@@ -118,7 +118,7 @@ $$ LANGUAGE plpgsql STRICT;
 
 CREATE VIEW audited AS
 SELECT tgrelid::regclass AS audited,
-       trim('\x00' from tgargs::text)::regclass AS events
+       trim('\x00' from encode(tgargs, 'escape'))::regclass AS events
   FROM pg_trigger WHERE tgfoid = 'audit.save'::regproc;
 
 END;
