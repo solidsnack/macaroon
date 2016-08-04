@@ -28,7 +28,7 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION temporal(regclass, name, name, boolean) IS
- 'Configures triggers and a state table top provide row versioning.';
+ 'Configures triggers and a state table to provide row versioning.';
 
 CREATE FUNCTION codegen(tab regclass,
                         state_schema name DEFAULT NULL,
