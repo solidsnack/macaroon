@@ -56,30 +56,35 @@ BEGIN
   code := code || $$
     CREATE SCHEMA IF NOT EXISTS $$||quote_ident(state_schema)||$$;
   $$;
+
   IF with_old THEN
     code := code || $$
       CREATE TABLE $$||fullname||$$ (
         LIKE temporal.state INCLUDING INDEXES INCLUDING DEFAULTS,
-        new $$||tab||$$,
-        old $$||tab||$$
+        new jsonb,
+        old jsonb
       ) INHERITS (temporal.state);
       CREATE FUNCTION temporal.save($$||tab||$$, $$||tab||$$)
-      RETURNS void AS $f$
-        INSERT INTO $$||fullname||$$ (new, old) VALUES ($1, $2)
+      RETURNS $$||fullname||$$ AS $f$
+        INSERT INTO $$||fullname||$$ (new, old)
+        VALUES (row_to_json($1)::jsonb, row_to_json($2)::jsonb)
+        RETURNING *
       $f$ LANGUAGE sql;
     $$;
   ELSE
     code := code || $$
       CREATE TABLE $$||fullname||$$ (
         LIKE temporal.state INCLUDING INDEXES INCLUDING DEFAULTS,
-        new $$||tab||$$
+        new jsonb
       ) INHERITS (temporal.state);
       CREATE FUNCTION temporal.save($$||tab||$$, $$||tab||$$)
-      RETURNS void AS $f$
-        INSERT INTO $$||fullname||$$ (new) VALUES ($1)
+      RETURNS $$||fullname||$$ AS $f$
+        INSERT INTO $$||fullname||$$ (new) VALUES (row_to_json($1)::jsonb)
+        RETURNING *
       $f$ LANGUAGE sql;
     $$;
   END IF;
+
   code := code || $$
     CREATE TRIGGER temporal AFTER INSERT OR UPDATE OR DELETE
         ON $$||tab||$$
@@ -105,12 +110,13 @@ END
 $$ LANGUAGE plpgsql;
 
 CREATE VIEW logged AS
-SELECT typrelid::regclass AS logged,
-       pg_class.oid::regclass AS states
-  FROM pg_class
-  JOIN pg_inherits ON (pg_class.oid = inhrelid)
-  JOIN pg_attribute ON (pg_class.oid = attrelid)
-  JOIN pg_type ON (pg_type.oid = atttypid)
- WHERE inhparent = 'temporal.state'::regclass AND attname = 'new';
+SELECT logged.oid::regclass AS logged,
+       states.oid::regclass AS states
+  FROM pg_class AS states
+  JOIN pg_inherits ON inhrelid = states.oid
+  JOIN pg_proc ON prorettype = states.reltype
+  JOIN pg_class AS logged ON logged.reltype = proargtypes[1]
+ WHERE inhparent = 'temporal.state'::regclass
+   AND pronamespace = 'temporal'::regnamespace AND proname = 'save';
 
 END;
