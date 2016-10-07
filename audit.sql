@@ -11,6 +11,10 @@ CREATE FUNCTION application_name() RETURNS text AS $$
   SELECT application_name FROM pg_stat_activity WHERE pid = pg_backend_pid()
 $$ LANGUAGE sql;
 
+CREATE FUNCTION cxn() RETURNS text AS $$
+  SELECT COALESCE(host(inet_client_addr())||':'||inet_client_port(), '(unix)')
+$$ LANGUAGE sql;
+
 CREATE TABLE event (
   txid      bigint NOT NULL DEFAULT txid_current(),
   op        op NOT NULL,
@@ -19,9 +23,7 @@ CREATE TABLE event (
   "user"    text NOT NULL DEFAULT session_user,
   app       text NOT NULL DEFAULT application_name(),
   pid       integer NOT NULL DEFAULT pg_backend_pid(),
-  client    text NOT NULL DEFAULT
-              COALESCE(host(inet_client_addr())||':'||inet_client_port(),
-                       '(unix)'),
+  client    text NOT NULL DEFAULT cxn(),
   PRIMARY KEY (txid, op, tab),
   CHECK (FALSE) NO INHERIT
 );
