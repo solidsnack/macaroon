@@ -39,7 +39,7 @@ CREATE INDEX "event/op" ON event (op);
 CREATE INDEX "event/tab" ON event (tab);
 CREATE INDEX "event/user" ON event ("user");
 CREATE INDEX "event/app" ON event (app);
-CREATE INDEX "event/pid" ON event (app);
+CREATE INDEX "event/pid" ON event (pid);
 
 CREATE FUNCTION audit(tab regclass,
                       event_schema name DEFAULT NULL,
