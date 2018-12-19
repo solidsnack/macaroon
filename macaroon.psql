@@ -1,4 +1,4 @@
-\i meta.sql
-\i notifiable.sql
-\i audit.sql
-\i temporal.sql
+\ir meta.sql
+\ir notifiable.sql
+\ir audit.sql
+\ir temporal.sql
