@@ -8,7 +8,6 @@ metaprogramming to derive advanced table configurations mechanically.
 The `meta` schema in `meta.sql` should be loaded before loading the others. To
 load all the schemas together, run `\i macaroon.psql` at the `psql` prompt.
 
-
 Creating Tables for Auditing & Versioning
 -------------------------------------------
 
@@ -51,9 +50,7 @@ A Note About Migrations
 -----------------------
 
 The audit tables are indifferent to migrations -- they do not store any row
-data. The temporal tables have columns that contain whole rows from the logged
-tables, so migrations will transparently upgrade the temporal tables, too. This
-is good and bad. It's good because migrations won't break logging; it's bad
-because migrations are going to hit not only the present state but also all
-past states.
+data.
+
+The temporal tables store `JSONB`, so they're also indifferent to migrations.
 
