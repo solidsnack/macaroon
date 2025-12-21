@@ -7,7 +7,9 @@ SET LOCAL search_path TO meta;  -- All functions will be created in this schema
 
 CREATE VIEW pk AS
 SELECT attrelid::regclass AS tab,
-       array_agg(attname)::name[] AS cols
+       array_agg(attname ORDER BY attnum)::name[] AS cols,
+       array_agg(atttypid ORDER BY attnum)::regtype[] AS types,
+       array_agg(attnum ORDER BY attnum) AS nums
   FROM pg_attribute
   JOIN pg_index ON (attrelid = indrelid AND attnum = ANY (indkey))
  WHERE indisprimary

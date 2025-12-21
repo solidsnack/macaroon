@@ -1,4 +1,5 @@
 \ir meta.sql
+\ir deny.sql
 \ir notifiable.sql
 \ir audit.sql
 \ir temporal.sql
